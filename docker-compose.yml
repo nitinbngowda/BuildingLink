@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  cronmaster:
+    build: .
+    container_name: cronmaster
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - PORT=5000
+      - HOST=0.0.0.0
+      - DATA_DIR=/app/data
+      - CRONMASTER_API_KEY=${CRONMASTER_API_KEY}
+    volumes:
+      # Persistent storage for database (jobs, history, logs) and BuildingLink config
+      - ./data:/app/data
+      - ./config.json:/app/config.json
+    labels:
+      - "traefik.enable=true"
+      # HTTP Router (Auto-redirects to HTTPS if your Traefik handles it)
+      - "traefik.http.routers.cronmaster.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.cronmaster.entrypoints=websecure"
+      - "traefik.http.routers.cronmaster.tls=true"
+      - "traefik.http.routers.cronmaster.tls.certresolver=${CERT_RESOLVER:-myresolver}"
+      # Service Port
+      - "traefik.http.services.cronmaster.loadbalancer.server.port=5000"
+    networks:
+      - traefik-net
+
+networks:
+  traefik-net:
+    name: ${TRAEFIK_NETWORK:-traefik-net}
+    external: true
+

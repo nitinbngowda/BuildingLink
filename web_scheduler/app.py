@@ -4,7 +4,7 @@ CronMaster — Lightweight Web Cron & Automation Scheduler
 =========================================================
 Zero-dependency web dashboard and background scheduler engine.
 Provides a modern REST API, SQLite run history, live log viewer,
-and on/off switches for scheduled jobs.
+API key authentication, and on/off switches for scheduled jobs.
 """
 
 import os
@@ -14,6 +14,7 @@ import time
 import sqlite3
 import subprocess
 import threading
+import hmac
 import re
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -21,13 +22,66 @@ from socketserver import ThreadingMixIn
 import urllib.parse
 import mimetypes
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+# Auto-load .env file if present (zero external dependencies)
+def load_dotenv():
+    candidates = [
+        os.path.join(PROJECT_ROOT, ".env"),
+        os.path.join(BASE_DIR, ".env"),
+        os.path.join(os.getcwd(), ".env"),
+        ".env"
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+                break
+            except Exception as e:
+                print(f"[!] Error reading .env: {e}")
+
+load_dotenv()
+
 # Configuration
 PORT = int(os.environ.get("PORT", 5000))
 HOST = os.environ.get("HOST", "0.0.0.0")
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(BASE_DIR)
-DB_PATH = os.path.join(BASE_DIR, "scheduler.db")
+DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATA_DIR, "scheduler.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+def get_auth_key():
+    return os.environ.get("CRONMASTER_API_KEY", "").strip()
+
+def is_auth_enabled():
+    return bool(get_auth_key())
+
+def check_auth(headers):
+    expected_key = get_auth_key()
+    if not expected_key:
+        return True  # Auth not configured / disabled
+    
+    token = ""
+    auth_header = headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif "X-API-Key" in headers:
+        token = headers["X-API-Key"].strip()
+
+    if not token:
+        return False
+    return hmac.compare_digest(token, expected_key)
 
 def get_config_path():
     candidates = [
@@ -375,7 +429,7 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
         self.end_headers()
         self.wfile.write(body)
 
@@ -383,7 +437,7 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
         self.end_headers()
 
     def read_json_body(self):
@@ -397,6 +451,15 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
+
+        # 0. Auth Status check (public so frontend knows if login screen is required)
+        if path == "/api/auth/status":
+            return self.send_json({"auth_required": is_auth_enabled()})
+
+        # Gate all other /api/* endpoints with authentication if enabled
+        if path.startswith("/api/") and path != "/api/auth/status":
+            if not check_auth(self.headers):
+                return self.send_json({"error": "Unauthorized. Invalid or missing API Key."}, 401)
 
         # 1. System Info
         if path == "/api/system":
@@ -425,7 +488,8 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
                 "success_rate": success_rate,
                 "next_scheduled_run": next_overall_run,
                 "os": sys.platform,
-                "python_version": sys.version.split()[0]
+                "python_version": sys.version.split()[0],
+                "auth_enabled": is_auth_enabled()
             })
 
         # 2. List Jobs
@@ -508,7 +572,6 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     return self.send_json({"error": str(e)}, 500)
             
-            # Return safe default template if config doesn't exist
             default_cfg = {
                 "username": "nbyadarahalli",
                 "password": "",
@@ -527,6 +590,33 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        # 0. Auth Verification Endpoint
+        if path == "/api/auth/verify":
+            data = self.read_json_body()
+            submitted_key = data.get("key", "").strip()
+            
+            # Also check header if provided
+            if not submitted_key:
+                auth_header = self.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    submitted_key = auth_header[7:].strip()
+                elif "X-API-Key" in self.headers:
+                    submitted_key = self.headers["X-API-Key"].strip()
+
+            expected_key = get_auth_key()
+            if not expected_key:
+                return self.send_json({"valid": True, "auth_required": False})
+
+            if submitted_key and hmac.compare_digest(submitted_key, expected_key):
+                return self.send_json({"valid": True, "auth_required": True})
+            else:
+                return self.send_json({"valid": False, "auth_required": True, "error": "Invalid API Key"}, 401)
+
+        # Gate all other /api/* POST endpoints with authentication
+        if path.startswith("/api/"):
+            if not check_auth(self.headers):
+                return self.send_json({"error": "Unauthorized. Invalid or missing API Key."}, 401)
 
         # 1. Create Job
         if path == "/api/jobs":
@@ -629,6 +719,10 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
+        if path.startswith("/api/"):
+            if not check_auth(self.headers):
+                return self.send_json({"error": "Unauthorized. Invalid or missing API Key."}, 401)
+
         m_job = re.match(r"^/api/jobs/(\d+)$", path)
         if m_job:
             job_id = int(m_job.group(1))
@@ -665,6 +759,10 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        if path.startswith("/api/"):
+            if not check_auth(self.headers):
+                return self.send_json({"error": "Unauthorized. Invalid or missing API Key."}, 401)
 
         m_job = re.match(r"^/api/jobs/(\d+)$", path)
         if m_job:
@@ -735,13 +833,15 @@ def run_server():
     scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
     scheduler_thread.start()
 
-    server = ThreadedHTTPServer((HOST, PORT), SchedulerAPIHandler)
+    auth_status = "ENABLED (API Key required)" if is_auth_enabled() else "DISABLED (Open access)"
     print(f"\n=======================================================")
     print(f"  CronMaster Scheduler Web Dashboard is Running!      ")
     print(f"  URL: http://localhost:{PORT}                          ")
     print(f"  Network: http://{HOST}:{PORT}                         ")
+    print(f"  Authentication: {auth_status}                         ")
     print(f"=======================================================\n")
 
+    server = ThreadedHTTPServer((HOST, PORT), SchedulerAPIHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

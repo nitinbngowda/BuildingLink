@@ -1,0 +1,14 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.log
+.vscode
+.idea
+run_daily.bat
+run_daily.ps1
+deploy_oracle.sh
+cronmaster.service
+

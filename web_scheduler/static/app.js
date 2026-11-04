@@ -6,18 +6,158 @@ let preferredTimes = [];
 let liveLogPollTimer = null;
 let currentModalHistoryId = null;
 
-// Initialize on page load
+// ==========================================
+// AUTHENTICATION & API WRAPPER
+// ==========================================
+function getStoredApiKey() {
+  return localStorage.getItem('cronmaster_api_key') || '';
+}
+
+function setStoredApiKey(key) {
+  if (key) {
+    localStorage.setItem('cronmaster_api_key', key);
+  } else {
+    localStorage.removeItem('cronmaster_api_key');
+  }
+}
+
+async function apiFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  const apiKey = getStoredApiKey();
+  if (apiKey) {
+    options.headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  const res = await fetch(url, options);
+  if (res.status === 401 && !url.includes('/api/auth/verify')) {
+    // Session / API key expired or invalid
+    showLoginScreen('Session expired or invalid API Key. Please sign in again.');
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
+async function initAuth() {
+  try {
+    const res = await fetch('/api/auth/status');
+    const data = await res.json();
+    if (!data.auth_required) {
+      // Auth is disabled in server config, directly show dashboard
+      revealDashboard();
+      return;
+    }
+
+    // Auth is required, check stored key
+    const storedKey = getStoredApiKey();
+    if (!storedKey) {
+      showLoginScreen();
+      return;
+    }
+
+    // Verify stored key
+    const vRes = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: storedKey })
+    });
+
+    if (vRes.ok) {
+      revealDashboard();
+    } else {
+      setStoredApiKey(null);
+      showLoginScreen();
+    }
+  } catch (err) {
+    console.error('Auth initialization error', err);
+    revealDashboard(); // Fallback
+  }
+}
+
+function showLoginScreen(errorMsg = '') {
+  const loginScreen = document.getElementById('loginScreen');
+  const appDashboard = document.getElementById('appDashboard');
+  const errEl = document.getElementById('loginError');
+
+  if (errorMsg) {
+    errEl.textContent = errorMsg;
+    errEl.classList.remove('hidden');
+  } else {
+    errEl.classList.add('hidden');
+  }
+
+  loginScreen.classList.remove('hidden');
+  appDashboard.classList.add('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function revealDashboard() {
+  const loginScreen = document.getElementById('loginScreen');
+  const appDashboard = document.getElementById('appDashboard');
+
+  loginScreen.classList.add('hidden');
+  appDashboard.classList.remove('hidden');
+
+  loadSystemMetrics();
+  loadJobs();
+  loadHistory();
+  loadBLConfig();
+  if (window.lucide) lucide.createIcons();
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const inputEl = document.getElementById('loginApiKey');
+  const submitBtn = document.getElementById('loginSubmitBtn');
+  const errEl = document.getElementById('loginError');
+  const key = inputEl.value.trim();
+
+  if (!key) return;
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="animate-spin mr-2">⟳</span> Verifying...';
+  errEl.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.valid) {
+      setStoredApiKey(key);
+      revealDashboard();
+    } else {
+      errEl.textContent = data.error || 'Invalid API Key. Please check your .env file.';
+      errEl.classList.remove('hidden');
+    }
+  } catch (err) {
+    errEl.textContent = 'Connection error: ' + err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<span>Unlock Dashboard</span><i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function logout() {
+  if (confirm('Lock dashboard and sign out?')) {
+    setStoredApiKey(null);
+    showLoginScreen();
+  }
+}
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) {
     lucide.createIcons();
   }
   updateClock();
   setInterval(updateClock, 1000);
-
-  loadSystemMetrics();
-  loadJobs();
-  loadHistory();
-  loadBLConfig();
 
   // Enter key support for preferred times input
   const timeInput = document.getElementById('newTimeInput');
@@ -30,11 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Polling for live status every 4 seconds
+  // Start Auth check
+  initAuth();
+
+  // Polling for live status every 4 seconds (only if dashboard is open)
   setInterval(() => {
-    loadSystemMetrics();
-    if (activeTab === 'jobs') loadJobs(false);
-    if (activeTab === 'history') loadHistory(false);
+    const appDashboard = document.getElementById('appDashboard');
+    if (appDashboard && !appDashboard.classList.contains('hidden')) {
+      loadSystemMetrics();
+      if (activeTab === 'jobs') loadJobs(false);
+      if (activeTab === 'history') loadHistory(false);
+    }
   }, 4000);
 });
 
@@ -91,7 +237,8 @@ function switchTab(tab) {
 // ==========================================
 async function loadSystemMetrics() {
   try {
-    const res = await fetch('/api/system');
+    const res = await apiFetch('/api/system');
+    if (!res.ok) return;
     const data = await res.json();
     document.getElementById('statActiveJobs').textContent = `${data.active_jobs} / ${data.total_jobs}`;
     document.getElementById('statTotalRuns').textContent = data.total_runs;
@@ -122,7 +269,8 @@ async function loadJobs(showLoading = true) {
   }
 
   try {
-    const res = await fetch('/api/jobs');
+    const res = await apiFetch('/api/jobs');
+    if (!res.ok) return;
     const jobs = await res.json();
     currentJobs = jobs;
 
@@ -260,8 +408,8 @@ function renderJobCard(job) {
 
 async function toggleJob(id) {
   try {
-    const res = await fetch(`/api/jobs/${id}/toggle`, { method: 'POST' });
-    const data = await res.json();
+    const res = await apiFetch(`/api/jobs/${id}/toggle`, { method: 'POST' });
+    if (!res.ok) return;
     loadJobs(false);
     loadSystemMetrics();
   } catch (err) {
@@ -271,7 +419,8 @@ async function toggleJob(id) {
 
 async function runJobNow(id) {
   try {
-    const res = await fetch(`/api/jobs/${id}/run`, { method: 'POST' });
+    const res = await apiFetch(`/api/jobs/${id}/run`, { method: 'POST' });
+    if (!res.ok) return;
     loadJobs(false);
     loadSystemMetrics();
     setTimeout(() => {
@@ -286,7 +435,8 @@ async function runJobNow(id) {
 async function deleteJob(id, name) {
   if (!confirm(`Are you sure you want to delete job "${name}"?`)) return;
   try {
-    await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/jobs/${id}`, { method: 'DELETE' });
+    if (!res.ok) return;
     loadJobs();
     loadSystemMetrics();
   } catch (err) {
@@ -302,7 +452,8 @@ async function loadHistory(showLoading = true) {
   const filter = document.getElementById('historyStatusFilter').value;
 
   try {
-    const res = await fetch(`/api/history?status=${filter}&limit=40`);
+    const res = await apiFetch(`/api/history?status=${filter}&limit=40`);
+    if (!res.ok) return;
     const history = await res.json();
 
     if (!history || history.length === 0) {
@@ -360,7 +511,8 @@ async function loadHistory(showLoading = true) {
 
 async function viewLatestLogForJob(jobId, jobName) {
   try {
-    const res = await fetch(`/api/history?job_id=${jobId}&limit=1`);
+    const res = await apiFetch(`/api/history?job_id=${jobId}&limit=1`);
+    if (!res.ok) return;
     const history = await res.json();
     if (history && history.length > 0) {
       openLogModal(history[0].id);
@@ -385,7 +537,8 @@ async function openLogModal(historyId) {
 
   async function fetchLog() {
     try {
-      const res = await fetch(`/api/history/${historyId}`);
+      const res = await apiFetch(`/api/history/${historyId}`);
+      if (!res.ok) return;
       const data = await res.json();
 
       titleEl.textContent = `${data.job_name} — Log`;
@@ -436,8 +589,8 @@ function openNewJobModal() {
   document.getElementById('jobModalName').value = '';
   document.getElementById('jobModalDesc').value = '';
   document.getElementById('jobModalCommand').value = '';
-  document.getElementById('jobModalPreset').value = '0 0 * * *';
-  document.getElementById('jobModalCron').value = '0 0 * * *';
+  document.getElementById('jobModalPreset').value = '57 23 * * *';
+  document.getElementById('jobModalCron').value = '57 23 * * *';
   document.getElementById('jobModalWorkDir').value = '';
   document.getElementById('jobModalEnabled').checked = true;
   document.getElementById('jobModal').classList.remove('hidden');
@@ -485,7 +638,7 @@ async function saveJob(event) {
   try {
     const url = id ? `/api/jobs/${id}` : '/api/jobs';
     const method = id ? 'PUT' : 'POST';
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -507,7 +660,7 @@ async function saveJob(event) {
 // ==========================================
 async function loadBLConfig() {
   try {
-    const res = await fetch('/api/buildinglink/config');
+    const res = await apiFetch('/api/buildinglink/config');
     if (!res.ok) {
       throw new Error(`Server returned ${res.status}`);
     }
@@ -577,7 +730,7 @@ async function saveBLConfig(event) {
   };
 
   try {
-    const res = await fetch('/api/buildinglink/config', {
+    const res = await apiFetch('/api/buildinglink/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -603,7 +756,7 @@ async function testDryRun() {
   badgeEl.innerHTML = '<span class="text-blue-400 animate-pulse">Running Dry Run...</span>';
 
   try {
-    const res = await fetch('/api/buildinglink/dry-run', { method: 'POST' });
+    const res = await apiFetch('/api/buildinglink/dry-run', { method: 'POST' });
     const data = await res.json();
     contentEl.textContent = data.output || 'No output produced';
     const isSuccess = data.exit_code === 0;

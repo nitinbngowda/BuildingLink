@@ -39,272 +39,322 @@
 </head>
 <body class="bg-surface-950 text-slate-100 min-h-screen font-['Inter'] antialiased flex flex-col selection:bg-brand-500 selection:text-white">
 
-  <!-- TOP NAVBAR -->
-  <header class="border-b border-slate-800/80 bg-surface-900/80 backdrop-blur sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+  <!-- LOGIN SCREEN (Overlay) -->
+  <div id="loginScreen" class="fixed inset-0 bg-surface-950 flex flex-col items-center justify-center p-4 z-50 transition-opacity duration-200">
+    <div class="w-full max-w-md bg-surface-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
       
-      <!-- Logo & Engine Status -->
-      <div class="flex items-center space-x-4">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
-            <i data-lucide="clock-9" class="w-6 h-6 text-white"></i>
-          </div>
-          <div>
-            <div class="flex items-center space-x-2">
-              <span class="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">CronMaster</span>
-              <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">Oracle VM</span>
-            </div>
-            <p class="text-xs text-slate-400">Automated Job & Amenity Scheduler</p>
-          </div>
+      <div class="text-center space-y-2">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 mx-auto flex items-center justify-center shadow-xl shadow-brand-500/25">
+          <i data-lucide="lock" class="w-7 h-7 text-white"></i>
         </div>
-
-        <div class="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Scheduler Engine Active</span>
-        </div>
+        <h2 class="text-xl font-bold text-white tracking-tight pt-2">CronMaster Access</h2>
+        <p class="text-xs text-slate-400">Enter the API Key configured in your <code class="text-brand-400 font-mono bg-surface-950 px-1.5 py-0.5 rounded border border-slate-800">.env</code> file to continue.</p>
       </div>
 
-      <!-- Right items: Server Clock & New Job button -->
-      <div class="flex items-center space-x-3">
-        <div class="hidden md:flex flex-col text-right pr-2">
-          <span id="serverClock" class="font-mono text-xs text-slate-200 font-medium">--:--:--</span>
-          <span class="text-[10px] text-slate-500 uppercase tracking-wider">Server Local Time</span>
+      <div id="loginError" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center font-medium"></div>
+
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Secret API Key</label>
+          <div class="relative">
+            <input type="password" id="loginApiKey" required placeholder="e.g. sk_cronmaster_..." class="w-full bg-surface-950 border border-slate-800 focus:border-brand-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none font-mono tracking-wider pr-10 transition">
+            <button type="button" onclick="togglePasswordVisibility('loginApiKey')" class="absolute inset-y-0 right-0 px-3 flex items-center text-slate-500 hover:text-white">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
 
-        <button onclick="openNewJobModal()" class="flex items-center space-x-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-md shadow-brand-600/25 transition">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>New Job</span>
+        <button type="submit" id="loginSubmitBtn" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center justify-center space-x-2">
+          <span>Unlock Dashboard</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <div class="text-center">
+        <p class="text-[11px] text-slate-500">Secured via Docker & Traefik • Key saved locally</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP DASHBOARD WRAPPER -->
+  <div id="appDashboard" class="flex-1 flex flex-col hidden">
+
+    <!-- TOP NAVBAR -->
+    <header class="border-b border-slate-800/80 bg-surface-900/80 backdrop-blur sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        
+        <!-- Logo & Engine Status -->
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+              <i data-lucide="clock-9" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">CronMaster</span>
+                <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">Docker + Traefik</span>
+              </div>
+              <p class="text-xs text-slate-400">Automated Job & Amenity Scheduler</p>
+            </div>
+          </div>
+
+          <div class="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Scheduler Engine Active</span>
+          </div>
+        </div>
+
+        <!-- Right items: Server Clock & New Job button & Logout -->
+        <div class="flex items-center space-x-3">
+          <div class="hidden md:flex flex-col text-right pr-2">
+            <span id="serverClock" class="font-mono text-xs text-slate-200 font-medium">--:--:--</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-wider">Server Local Time</span>
+          </div>
+
+          <button onclick="openNewJobModal()" class="flex items-center space-x-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-md shadow-brand-600/25 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>New Job</span>
+          </button>
+
+          <button onclick="logout()" id="logoutBtn" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition" title="Lock & Logout">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+      <!-- METRICS CARDS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Schedulers</p>
+              <h3 id="statActiveJobs" class="text-2xl font-bold text-white mt-1">-- / --</h3>
+            </div>
+            <div class="p-2.5 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20">
+              <i data-lucide="toggle-right" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+            <span class="text-emerald-400 font-medium">Auto-triggers</span> at scheduled time
+          </p>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Runs</p>
+              <h3 id="statTotalRuns" class="text-2xl font-bold text-white mt-1">--</h3>
+            </div>
+            <div class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <i data-lucide="activity" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+            Recorded in SQLite run history
+          </p>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Success Rate</p>
+              <h3 id="statSuccessRate" class="text-2xl font-bold text-emerald-400 mt-1">--%</h3>
+            </div>
+            <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+            Successful execution ratio
+          </p>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Next Run</p>
+              <h3 id="statNextRun" class="text-sm font-semibold text-amber-300 mt-2 truncate max-w-[180px]">--:--:--</h3>
+            </div>
+            <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <p id="statNextRunDesc" class="text-[11px] text-slate-500 mt-3 truncate">Upcoming scheduled job</p>
+        </div>
+
+      </div>
+
+      <!-- TABS NAVIGATION -->
+      <div class="flex border-b border-slate-800 space-x-8">
+        <button onclick="switchTab('jobs')" id="tabBtnJobs" class="tab-btn active pb-3 text-sm font-medium text-brand-400 border-b-2 border-brand-500 flex items-center space-x-2 transition">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Scheduled Jobs</span>
+          <span id="jobsCountBadge" class="ml-1 px-2 py-0.2 bg-slate-800 text-slate-300 rounded-full text-xs">0</span>
+        </button>
+
+        <button onclick="switchTab('history')" id="tabBtnHistory" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          <span>Run History</span>
+        </button>
+
+        <button onclick="switchTab('buildinglink')" id="tabBtnBL" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
+          <i data-lucide="settings-2" class="w-4 h-4"></i>
+          <span>BuildingLink Settings</span>
         </button>
       </div>
 
-    </div>
-  </header>
-
-  <!-- MAIN CONTAINER -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
-
-    <!-- METRICS CARDS -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
-        <div class="flex justify-between items-start">
+      <!-- TAB 1: JOBS VIEW -->
+      <section id="tabJobs" class="space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Schedulers</p>
-            <h3 id="statActiveJobs" class="text-2xl font-bold text-white mt-1">-- / --</h3>
+            <h2 class="text-base font-semibold text-white">Configured Jobs</h2>
+            <p class="text-xs text-slate-400">Toggle automatic scheduling on/off or trigger manual runs anytime.</p>
           </div>
-          <div class="p-2.5 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20">
-            <i data-lucide="toggle-right" class="w-5 h-5"></i>
+
+          <div class="flex items-center space-x-3 w-full sm:w-auto">
+            <button onclick="loadJobs()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
           </div>
         </div>
-        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
-          <span class="text-emerald-400 font-medium">Auto-triggers</span> at scheduled time
-        </p>
-      </div>
 
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
-        <div class="flex justify-between items-start">
+        <!-- Jobs Grid -->
+        <div id="jobsList" class="grid grid-cols-1 gap-4">
+          <div class="p-8 text-center text-slate-500">Loading jobs...</div>
+        </div>
+      </section>
+
+      <!-- TAB 2: RUN HISTORY VIEW -->
+      <section id="tabHistory" class="hidden space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Runs</p>
-            <h3 id="statTotalRuns" class="text-2xl font-bold text-white mt-1">--</h3>
+            <h2 class="text-base font-semibold text-white">Execution Logs & History</h2>
+            <p class="text-xs text-slate-400">Complete audit trail of all automated and manual job runs.</p>
           </div>
-          <div class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <i data-lucide="activity" class="w-5 h-5"></i>
-          </div>
-        </div>
-        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
-          Recorded in SQLite run history
-        </p>
-      </div>
 
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Success Rate</p>
-            <h3 id="statSuccessRate" class="text-2xl font-bold text-emerald-400 mt-1">--%</h3>
-          </div>
-          <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
-          </div>
-        </div>
-        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
-          Successful execution ratio
-        </p>
-      </div>
-
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
-        <div class="flex justify-between items-start">
-          <div>
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Next Run</p>
-            <h3 id="statNextRun" class="text-sm font-semibold text-amber-300 mt-2 truncate max-w-[180px]">--:--:--</h3>
-          </div>
-          <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <i data-lucide="calendar-clock" class="w-5 h-5"></i>
-          </div>
-        </div>
-        <p id="statNextRunDesc" class="text-[11px] text-slate-500 mt-3 truncate">Upcoming scheduled job</p>
-      </div>
-
-    </div>
-
-    <!-- TABS NAVIGATION -->
-    <div class="flex border-b border-slate-800 space-x-8">
-      <button onclick="switchTab('jobs')" id="tabBtnJobs" class="tab-btn active pb-3 text-sm font-medium text-brand-400 border-b-2 border-brand-500 flex items-center space-x-2 transition">
-        <i data-lucide="layers" class="w-4 h-4"></i>
-        <span>Scheduled Jobs</span>
-        <span id="jobsCountBadge" class="ml-1 px-2 py-0.2 bg-slate-800 text-slate-300 rounded-full text-xs">0</span>
-      </button>
-
-      <button onclick="switchTab('history')" id="tabBtnHistory" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
-        <i data-lucide="history" class="w-4 h-4"></i>
-        <span>Run History</span>
-      </button>
-
-      <button onclick="switchTab('buildinglink')" id="tabBtnBL" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
-        <i data-lucide="settings-2" class="w-4 h-4"></i>
-        <span>BuildingLink Settings</span>
-      </button>
-    </div>
-
-    <!-- TAB 1: JOBS VIEW -->
-    <section id="tabJobs" class="space-y-4">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 class="text-base font-semibold text-white">Configured Jobs</h2>
-          <p class="text-xs text-slate-400">Toggle automatic scheduling on/off or trigger manual runs anytime.</p>
-        </div>
-
-        <div class="flex items-center space-x-3 w-full sm:w-auto">
-          <button onclick="loadJobs()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- Jobs Grid -->
-      <div id="jobsList" class="grid grid-cols-1 gap-4">
-        <!-- Rendered by app.js -->
-        <div class="p-8 text-center text-slate-500">Loading jobs...</div>
-      </div>
-    </section>
-
-    <!-- TAB 2: RUN HISTORY VIEW -->
-    <section id="tabHistory" class="hidden space-y-4">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 class="text-base font-semibold text-white">Execution Logs & History</h2>
-          <p class="text-xs text-slate-400">Complete audit trail of all automated and manual job runs.</p>
-        </div>
-
-        <div class="flex items-center space-x-3">
-          <select id="historyStatusFilter" onchange="loadHistory()" class="bg-surface-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-3 py-2 outline-none focus:border-brand-500">
-            <option value="all">All Statuses</option>
-            <option value="success">Success</option>
-            <option value="failed">Failed</option>
-            <option value="running">Running</option>
-          </select>
-
-          <button onclick="loadHistory()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh History">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-slate-300">
-            <thead class="bg-surface-850 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
-              <tr>
-                <th class="px-5 py-3.5">Status</th>
-                <th class="px-5 py-3.5">Job Name</th>
-                <th class="px-5 py-3.5">Trigger</th>
-                <th class="px-5 py-3.5">Started At</th>
-                <th class="px-5 py-3.5">Duration</th>
-                <th class="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="historyTableBody" class="divide-y divide-slate-800/60 font-normal">
-              <tr>
-                <td colspan="6" class="px-5 py-8 text-center text-slate-500">Loading history...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 3: BUILDINGLINK SETTINGS VIEW -->
-    <section id="tabBuildingLink" class="hidden space-y-6">
-      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-6 max-w-3xl space-y-6">
-        <div>
           <div class="flex items-center space-x-3">
-            <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <i data-lucide="dumbbell" class="w-5 h-5"></i>
-            </div>
-            <div>
-              <h2 class="text-base font-semibold text-white">BuildingLink Badminton Configuration</h2>
-              <p class="text-xs text-slate-400">Customize credentials, court ID, and preferred booking time priority.</p>
-            </div>
+            <select id="historyStatusFilter" onchange="loadHistory()" class="bg-surface-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-3 py-2 outline-none focus:border-brand-500">
+              <option value="all">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="running">Running</option>
+            </select>
+
+            <button onclick="loadHistory()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh History">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
           </div>
         </div>
 
-        <form id="blConfigForm" onsubmit="saveBLConfig(event)" class="space-y-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Username</label>
-              <input type="text" id="blUsername" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Password</label>
-              <div class="relative">
-                <input type="password" id="blPassword" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500 pr-10">
-                <button type="button" onclick="togglePasswordVisibility('blPassword')" class="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-white">
-                  <i data-lucide="eye" class="w-4 h-4"></i>
-                </button>
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-surface-850 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                <tr>
+                  <th class="px-5 py-3.5">Status</th>
+                  <th class="px-5 py-3.5">Job Name</th>
+                  <th class="px-5 py-3.5">Trigger</th>
+                  <th class="px-5 py-3.5">Started At</th>
+                  <th class="px-5 py-3.5">Duration</th>
+                  <th class="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody" class="divide-y divide-slate-800/60 font-normal">
+                <tr>
+                  <td colspan="6" class="px-5 py-8 text-center text-slate-500">Loading history...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: BUILDINGLINK SETTINGS VIEW -->
+      <section id="tabBuildingLink" class="hidden space-y-6">
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-6 max-w-3xl space-y-6">
+          <div>
+            <div class="flex items-center space-x-3">
+              <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                <i data-lucide="dumbbell" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h2 class="text-base font-semibold text-white">BuildingLink Badminton Configuration</h2>
+                <p class="text-xs text-slate-400">Customize credentials, court ID, and preferred booking time priority.</p>
               </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <form id="blConfigForm" onsubmit="saveBLConfig(event)" class="space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Username</label>
+                <input type="text" id="blUsername" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Password</label>
+                <div class="relative">
+                  <input type="password" id="blPassword" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500 pr-10">
+                  <button type="button" onclick="togglePasswordVisibility('blPassword')" class="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-white">
+                    <i data-lucide="eye" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Amenity ID (Badminton Court)</label>
+                <input type="text" id="blAmenityId" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-brand-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Booking Window (Days Ahead)</label>
+                <select id="blDaysAhead" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+                  <option value="1">Tomorrow (+1 day) — Best for 12 AM midnight runs</option>
+                  <option value="0">Today (+0 days) — Same-day booking</option>
+                  <option value="2">2 Days Ahead (+2 days)</option>
+                  <option value="3">3 Days Ahead (+3 days)</option>
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Amenity ID (Badminton Court)</label>
-              <input type="text" id="blAmenityId" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-brand-500">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Preferred Time Slots (In Order of Preference)</label>
+              <p class="text-[11px] text-slate-400 mb-2">The scheduler tries slot 1 first; if booked by someone else, it automatically falls back to slot 2, 3, etc.</p>
+              <div id="preferredTimesList" class="flex flex-wrap gap-2 mb-3"></div>
+              <div class="flex gap-2">
+                <input type="text" id="newTimeInput" placeholder="e.g. 19:00, 20:00, or 7:00 PM" class="flex-1 bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+                <button type="button" onclick="addPreferredTime()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded-lg transition font-medium">Add Time</button>
+              </div>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Booking Window (Days Ahead)</label>
-              <select id="blDaysAhead" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
-                <option value="1">Tomorrow (+1 day) — Best for 12 AM midnight runs</option>
-                <option value="0">Today (+0 days) — Same-day booking</option>
-                <option value="2">2 Days Ahead (+2 days)</option>
-                <option value="3">3 Days Ahead (+3 days)</option>
-              </select>
+
+            <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+              <button type="button" onclick="testDryRun()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg transition flex items-center space-x-2">
+                <i data-lucide="play-circle" class="w-4 h-4 text-brand-400"></i>
+                <span>Test Dry-Run (Check Slots)</span>
+              </button>
+
+              <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-xs font-semibold text-white rounded-lg shadow-md shadow-brand-600/25 transition">
+                Save Configuration
+              </button>
             </div>
-          </div>
+          </form>
+        </div>
+      </section>
 
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Preferred Time Slots (In Order of Preference)</label>
-            <p class="text-[11px] text-slate-400 mb-2">The scheduler tries slot 1 first; if booked by someone else, it automatically falls back to slot 2, 3, etc.</p>
-            <div id="preferredTimesList" class="flex flex-wrap gap-2 mb-3"></div>
-            <div class="flex gap-2">
-              <input type="text" id="newTimeInput" placeholder="e.g. 19:00, 20:00, or 7:00 PM" class="flex-1 bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
-              <button type="button" onclick="addPreferredTime()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded-lg transition font-medium">Add Time</button>
-            </div>
-          </div>
+    </main>
 
-          <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
-            <button type="button" onclick="testDryRun()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg transition flex items-center space-x-2">
-              <i data-lucide="play-circle" class="w-4 h-4 text-brand-400"></i>
-              <span>Test Dry-Run (Check Slots)</span>
-            </button>
+    <footer class="border-t border-slate-800/60 py-4 text-center text-slate-500 text-xs">
+      CronMaster • Automated BuildingLink & Linux Background Scheduler • Docker & Traefik Protected
+    </footer>
 
-            <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-xs font-semibold text-white rounded-lg shadow-md shadow-brand-600/25 transition">
-              Save Configuration
-            </button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-  </main>
+  </div>
 
   <!-- LOG VIEWER MODAL -->
   <div id="logModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -379,7 +429,8 @@
         <div>
           <label class="block font-medium text-slate-300 mb-1">Schedule Preset</label>
           <select id="jobModalPreset" onchange="applySchedulePreset()" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 outline-none focus:border-brand-500 mb-2">
-            <option value="0 0 * * *">Every day at 12:00 AM Midnight (0 0 * * *)</option>
+            <option value="57 23 * * *">Pre-warm at 11:57 PM -> Book at 12:00:00 AM (57 23 * * *)</option>
+            <option value="0 0 * * *">Direct at 12:00 AM Midnight (0 0 * * *)</option>
             <option value="0 12 * * *">Every day at 12:00 PM Noon (0 12 * * *)</option>
             <option value="0 * * * *">Every hour at minute 0 (0 * * * *)</option>
             <option value="*/30 * * * *">Every 30 minutes (*/30 * * * *)</option>
@@ -391,7 +442,7 @@
 
         <div>
           <label class="block font-medium text-slate-300 mb-1">Cron Expression (5 fields: min hour dom mon dow)</label>
-          <input type="text" id="jobModalCron" required value="0 0 * * *" class="w-full font-mono bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-brand-300 font-semibold outline-none focus:border-brand-500">
+          <input type="text" id="jobModalCron" required value="57 23 * * *" class="w-full font-mono bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-brand-300 font-semibold outline-none focus:border-brand-500">
         </div>
 
         <div>
@@ -413,11 +464,6 @@
     </div>
   </div>
 
-  <footer class="border-t border-slate-800/60 py-4 text-center text-slate-500 text-xs">
-    CronMaster • Automated BuildingLink & Linux Background Scheduler • Built with Zero Dependencies
-  </footer>
-
   <script src="app.js"></script>
 </body>
 </html>
-
