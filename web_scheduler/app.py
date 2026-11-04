@@ -452,12 +452,12 @@ class SchedulerAPIHandler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
-        # 0. Auth Status check (public so frontend knows if login screen is required)
-        if path == "/api/auth/status":
-            return self.send_json({"auth_required": is_auth_enabled()})
+        # 0. Healthcheck & Auth Status check (public)
+        if path in ("/health", "/api/health", "/api/auth/status"):
+            return self.send_json({"status": "ok", "auth_required": is_auth_enabled()})
 
         # Gate all other /api/* endpoints with authentication if enabled
-        if path.startswith("/api/") and path != "/api/auth/status":
+        if path.startswith("/api/"):
             if not check_auth(self.headers):
                 return self.send_json({"error": "Unauthorized. Invalid or missing API Key."}, 401)
 

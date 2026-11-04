@@ -19,11 +19,11 @@ services:
       - ./config.json:/app/config.json
     labels:
       - "traefik.enable=true"
-      # HTTP Router (Auto-redirects to HTTPS if your Traefik handles it)
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-aio_network}"
+      # HTTP Router
       - "traefik.http.routers.cronmaster.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.cronmaster.entrypoints=websecure"
-      - "traefik.http.routers.cronmaster.tls=true"
-      - "traefik.http.routers.cronmaster.tls.certresolver=${CERT_RESOLVER:-myresolver}"
+      - "traefik.http.routers.cronmaster.tls.certresolver=${CERT_RESOLVER:-letsencrypt}"
       # Service Port
       - "traefik.http.services.cronmaster.loadbalancer.server.port=5000"
     networks:
@@ -31,6 +31,6 @@ services:
 
 networks:
   traefik-net:
-    name: ${TRAEFIK_NETWORK:-traefik-net}
+    name: ${TRAEFIK_NETWORK:-aio_network}
     external: true
 
