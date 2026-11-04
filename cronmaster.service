@@ -1,0 +1,21 @@
+[Unit]
+Description=CronMaster Web Scheduler & Automation Engine
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/BuildingLink
+ExecStart=/usr/bin/python3 /home/ubuntu/BuildingLink/web_scheduler/app.py
+Restart=always
+RestartSec=5
+Environment=PORT=5000
+Environment=HOST=0.0.0.0
+Environment=PYTHONUNBUFFERED=1
+
+# Resource & security limits
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+

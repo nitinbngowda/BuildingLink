@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CronMaster — Automation & Cron Scheduler</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            surface: {
+              800: '#1e293b',
+              850: '#172033',
+              900: '#0f172a',
+              950: '#020617',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="bg-surface-950 text-slate-100 min-h-screen font-['Inter'] antialiased flex flex-col selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP NAVBAR -->
+  <header class="border-b border-slate-800/80 bg-surface-900/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Engine Status -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+            <i data-lucide="clock-9" class="w-6 h-6 text-white"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">CronMaster</span>
+              <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">Oracle VM</span>
+            </div>
+            <p class="text-xs text-slate-400">Automated Job & Amenity Scheduler</p>
+          </div>
+        </div>
+
+        <div class="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Scheduler Engine Active</span>
+        </div>
+      </div>
+
+      <!-- Right items: Server Clock & New Job button -->
+      <div class="flex items-center space-x-3">
+        <div class="hidden md:flex flex-col text-right pr-2">
+          <span id="serverClock" class="font-mono text-xs text-slate-200 font-medium">--:--:--</span>
+          <span class="text-[10px] text-slate-500 uppercase tracking-wider">Server Local Time</span>
+        </div>
+
+        <button onclick="openNewJobModal()" class="flex items-center space-x-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-md shadow-brand-600/25 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>New Job</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+    <!-- METRICS CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Schedulers</p>
+            <h3 id="statActiveJobs" class="text-2xl font-bold text-white mt-1">-- / --</h3>
+          </div>
+          <div class="p-2.5 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20">
+            <i data-lucide="toggle-right" class="w-5 h-5"></i>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+          <span class="text-emerald-400 font-medium">Auto-triggers</span> at scheduled time
+        </p>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Runs</p>
+            <h3 id="statTotalRuns" class="text-2xl font-bold text-white mt-1">--</h3>
+          </div>
+          <div class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <i data-lucide="activity" class="w-5 h-5"></i>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+          Recorded in SQLite run history
+        </p>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Success Rate</p>
+            <h3 id="statSuccessRate" class="text-2xl font-bold text-emerald-400 mt-1">--%</h3>
+          </div>
+          <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-3 flex items-center gap-1">
+          Successful execution ratio
+        </p>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Next Run</p>
+            <h3 id="statNextRun" class="text-sm font-semibold text-amber-300 mt-2 truncate max-w-[180px]">--:--:--</h3>
+          </div>
+          <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+          </div>
+        </div>
+        <p id="statNextRunDesc" class="text-[11px] text-slate-500 mt-3 truncate">Upcoming scheduled job</p>
+      </div>
+
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="flex border-b border-slate-800 space-x-8">
+      <button onclick="switchTab('jobs')" id="tabBtnJobs" class="tab-btn active pb-3 text-sm font-medium text-brand-400 border-b-2 border-brand-500 flex items-center space-x-2 transition">
+        <i data-lucide="layers" class="w-4 h-4"></i>
+        <span>Scheduled Jobs</span>
+        <span id="jobsCountBadge" class="ml-1 px-2 py-0.2 bg-slate-800 text-slate-300 rounded-full text-xs">0</span>
+      </button>
+
+      <button onclick="switchTab('history')" id="tabBtnHistory" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
+        <i data-lucide="history" class="w-4 h-4"></i>
+        <span>Run History</span>
+      </button>
+
+      <button onclick="switchTab('buildinglink')" id="tabBtnBL" class="tab-btn pb-3 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-2 transition">
+        <i data-lucide="settings-2" class="w-4 h-4"></i>
+        <span>BuildingLink Settings</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: JOBS VIEW -->
+    <section id="tabJobs" class="space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-white">Configured Jobs</h2>
+          <p class="text-xs text-slate-400">Toggle automatic scheduling on/off or trigger manual runs anytime.</p>
+        </div>
+
+        <div class="flex items-center space-x-3 w-full sm:w-auto">
+          <button onclick="loadJobs()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Jobs Grid -->
+      <div id="jobsList" class="grid grid-cols-1 gap-4">
+        <!-- Rendered by app.js -->
+        <div class="p-8 text-center text-slate-500">Loading jobs...</div>
+      </div>
+    </section>
+
+    <!-- TAB 2: RUN HISTORY VIEW -->
+    <section id="tabHistory" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-white">Execution Logs & History</h2>
+          <p class="text-xs text-slate-400">Complete audit trail of all automated and manual job runs.</p>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <select id="historyStatusFilter" onchange="loadHistory()" class="bg-surface-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-3 py-2 outline-none focus:border-brand-500">
+            <option value="all">All Statuses</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed</option>
+            <option value="running">Running</option>
+          </select>
+
+          <button onclick="loadHistory()" class="p-2 rounded-lg bg-surface-900 border border-slate-800 text-slate-400 hover:text-white transition" title="Refresh History">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-surface-850 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+              <tr>
+                <th class="px-5 py-3.5">Status</th>
+                <th class="px-5 py-3.5">Job Name</th>
+                <th class="px-5 py-3.5">Trigger</th>
+                <th class="px-5 py-3.5">Started At</th>
+                <th class="px-5 py-3.5">Duration</th>
+                <th class="px-5 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-slate-800/60 font-normal">
+              <tr>
+                <td colspan="6" class="px-5 py-8 text-center text-slate-500">Loading history...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: BUILDINGLINK SETTINGS VIEW -->
+    <section id="tabBuildingLink" class="hidden space-y-6">
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-6 max-w-3xl space-y-6">
+        <div>
+          <div class="flex items-center space-x-3">
+            <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <i data-lucide="dumbbell" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-white">BuildingLink Badminton Configuration</h2>
+              <p class="text-xs text-slate-400">Customize credentials, court ID, and preferred booking time priority.</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="blConfigForm" onsubmit="saveBLConfig(event)" class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Username</label>
+              <input type="text" id="blUsername" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">BuildingLink Password</label>
+              <div class="relative">
+                <input type="password" id="blPassword" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500 pr-10">
+                <button type="button" onclick="togglePasswordVisibility('blPassword')" class="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-white">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Amenity ID (Badminton Court)</label>
+              <input type="text" id="blAmenityId" required class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Booking Window (Days Ahead)</label>
+              <select id="blDaysAhead" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+                <option value="1">Tomorrow (+1 day) — Best for 12 AM midnight runs</option>
+                <option value="0">Today (+0 days) — Same-day booking</option>
+                <option value="2">2 Days Ahead (+2 days)</option>
+                <option value="3">3 Days Ahead (+3 days)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Preferred Time Slots (In Order of Preference)</label>
+            <p class="text-[11px] text-slate-400 mb-2">The scheduler tries slot 1 first; if booked by someone else, it automatically falls back to slot 2, 3, etc.</p>
+            <div id="preferredTimesList" class="flex flex-wrap gap-2 mb-3"></div>
+            <div class="flex gap-2">
+              <input type="text" id="newTimeInput" placeholder="e.g. 19:00, 20:00, or 7:00 PM" class="flex-1 bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-brand-500">
+              <button type="button" onclick="addPreferredTime()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded-lg transition font-medium">Add Time</button>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+            <button type="button" onclick="testDryRun()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg transition flex items-center space-x-2">
+              <i data-lucide="play-circle" class="w-4 h-4 text-brand-400"></i>
+              <span>Test Dry-Run (Check Slots)</span>
+            </button>
+
+            <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-xs font-semibold text-white rounded-lg shadow-md shadow-brand-600/25 transition">
+              Save Configuration
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- LOG VIEWER MODAL -->
+  <div id="logModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-surface-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-surface-850">
+        <div class="flex items-center space-x-3">
+          <div class="p-2 rounded-lg bg-slate-800 text-slate-300">
+            <i data-lucide="terminal" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="logModalTitle" class="text-sm font-semibold text-white">Execution Log</h3>
+            <p id="logModalSubtitle" class="text-[11px] text-slate-400">Run ID #-- • Timestamp</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button onclick="copyLogOutput()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition flex items-center space-x-1.5" title="Copy Log">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span id="copyBtnText">Copy</span>
+          </button>
+          <button onclick="closeLogModal()" class="p-1.5 text-slate-400 hover:text-white rounded-lg transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Terminal) -->
+      <div class="p-4 flex-1 overflow-y-auto bg-[#090d16]">
+        <pre id="logModalContent" class="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed select-text"></pre>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 border-t border-slate-800 bg-surface-850 flex items-center justify-between text-xs text-slate-400">
+        <span id="logModalStatusBadge">Status: --</span>
+        <button onclick="closeLogModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition">Close</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JOB EDIT / CREATE MODAL -->
+  <div id="jobModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-surface-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-surface-850">
+        <h3 id="jobModalTitle" class="text-sm font-semibold text-white">New Scheduled Job</h3>
+        <button onclick="closeJobModal()" class="p-1.5 text-slate-400 hover:text-white rounded-lg transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="jobForm" onsubmit="saveJob(event)" class="p-6 space-y-4 text-xs">
+        <input type="hidden" id="jobModalId">
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Job Name</label>
+          <input type="text" id="jobModalName" required placeholder="e.g. Daily Database Backup" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-white outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Description (Optional)</label>
+          <input type="text" id="jobModalDesc" placeholder="Brief summary of what this job does" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-white outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Shell Command</label>
+          <input type="text" id="jobModalCommand" required placeholder="e.g. python3 my_script.py or /usr/bin/bash backup.sh" class="w-full font-mono bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Schedule Preset</label>
+          <select id="jobModalPreset" onchange="applySchedulePreset()" class="w-full bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 outline-none focus:border-brand-500 mb-2">
+            <option value="0 0 * * *">Every day at 12:00 AM Midnight (0 0 * * *)</option>
+            <option value="0 12 * * *">Every day at 12:00 PM Noon (0 12 * * *)</option>
+            <option value="0 * * * *">Every hour at minute 0 (0 * * * *)</option>
+            <option value="*/30 * * * *">Every 30 minutes (*/30 * * * *)</option>
+            <option value="*/15 * * * *">Every 15 minutes (*/15 * * * *)</option>
+            <option value="0 9 * * 1-5">Monday to Friday at 9:00 AM (0 9 * * 1-5)</option>
+            <option value="custom">Custom Cron Expression</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Cron Expression (5 fields: min hour dom mon dow)</label>
+          <input type="text" id="jobModalCron" required value="0 0 * * *" class="w-full font-mono bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-brand-300 font-semibold outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Working Directory (Optional)</label>
+          <input type="text" id="jobModalWorkDir" placeholder="Leave blank to use project folder" class="w-full font-mono bg-surface-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 outline-none focus:border-brand-500">
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <input type="checkbox" id="jobModalEnabled" checked class="w-4 h-4 rounded text-brand-600 bg-surface-950 border-slate-800 focus:ring-brand-500">
+          <label for="jobModalEnabled" class="text-slate-300 font-medium">Enable automatic scheduling</label>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex justify-end space-x-3">
+          <button type="button" onclick="closeJobModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition font-medium">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition font-semibold shadow-md shadow-brand-600/20">Save Job</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-800/60 py-4 text-center text-slate-500 text-xs">
+    CronMaster • Automated BuildingLink & Linux Background Scheduler • Built with Zero Dependencies
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
