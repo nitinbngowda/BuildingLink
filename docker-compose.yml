@@ -17,6 +17,7 @@ services:
       # Persistent storage for database (jobs, history, logs) and BuildingLink config
       - ./data:/app/data
       - ./config.json:/app/config.json
+      - ./buildinglink_bot.py:/app/buildinglink_bot.py
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-aio_network}"

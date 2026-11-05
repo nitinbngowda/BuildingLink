@@ -36,8 +36,46 @@ class BuildingLinkClient:
         self.cj = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cj))
 
-    def login(self):
+    def refresh(self):
+        """Refreshes the access token using the OAuth2 refresh_token grant."""
+        if not self.refresh_token:
+            return False
+        token_data = {
+            'grant_type': 'refresh_token',
+            'client_id': 'vue-app',
+            'refresh_token': self.refresh_token
+        }
+        token_req = urllib.request.Request(
+            f"{AUTH_BASE_URL}/connect/token",
+            data=urllib.parse.urlencode(token_data).encode(),
+            headers={
+                'User-Agent': USER_AGENT,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        )
+        try:
+            with self.opener.open(token_req) as token_resp:
+                tokens = json.loads(token_resp.read().decode())
+                self.access_token = tokens['access_token']
+                if 'refresh_token' in tokens:
+                    self.refresh_token = tokens['refresh_token']
+                self.token_expiry = time.time() + tokens.get('expires_in', 900) - 30
+            print("[+] Token refreshed successfully via refresh_token.")
+            return True
+        except Exception as e:
+            print(f"[*] Token refresh failed ({e}), falling back to full login...")
+            return False
+
+    def login(self, force=False):
         """Authenticates using OAuth 2.0 Authorization Code flow with PKCE."""
+        # If token is already valid and not forcing fresh login, reuse it
+        if not force and self.access_token and time.time() < self.token_expiry:
+            return self.access_token
+
+        # Try fast refresh_token first if available
+        if self.refresh_token and self.refresh():
+            return self.access_token
+
         print(f"[*] Authenticating with BuildingLink as '{self.username}'...")
         
         # 1. Generate PKCE verifier and challenge
@@ -61,45 +99,54 @@ class BuildingLinkClient:
             login_html = resp.read().decode('utf-8')
             login_url = resp.geturl()
 
-        # Extract __RequestVerificationToken and ReturnUrl
-        token_match = re.search(r'name="__RequestVerificationToken"\s+type="hidden"\s+value="([^"]+)"', login_html)
-        if not token_match:
-            raise RuntimeError("Failed to find __RequestVerificationToken on login page")
-
-        req_token = token_match.group(1)
+        # Check if already authenticated via active session cookies
         parsed_url = urllib.parse.urlparse(login_url)
         qs = urllib.parse.parse_qs(parsed_url.query)
-        return_url = qs.get('ReturnUrl', [''])[0]
-
-        # 2. Submit credentials
-        login_data = {
-            'Username': self.username,
-            'Password': self.password,
-            'ReturnUrl': return_url,
-            'RememberLogin': 'true',
-            '__RequestVerificationToken': req_token
-        }
-
-        post_url = f"{AUTH_BASE_URL}/Account/Login?ReturnUrl=" + urllib.parse.quote(return_url)
-        post_req = urllib.request.Request(
-            post_url,
-            data=urllib.parse.urlencode(login_data).encode(),
-            headers={
-                'User-Agent': USER_AGENT,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        )
-
-        with self.opener.open(post_req) as post_resp:
-            final_url = post_resp.geturl()
-
-        qs_final = urllib.parse.parse_qs(urllib.parse.urlparse(final_url).query)
-        auth_code = qs_final.get('code', [None])[0]
+        auth_code = qs.get('code', [None])[0]
 
         if not auth_code:
-            # Check for error in query or page
-            error = qs_final.get('error', [None])[0]
-            raise RuntimeError(f"Authentication failed. No auth code returned. Error: {error}")
+            # Extract __RequestVerificationToken and ReturnUrl
+            token_match = re.search(r'name="__RequestVerificationToken"\s+type="hidden"\s+value="([^"]+)"', login_html)
+            if not token_match:
+                # If cookies were stale or corrupted, clear cookie jar and retry once cleanly
+                if len(self.cj) > 0:
+                    print("[*] Stale session detected. Clearing cookies and retrying login...")
+                    self.cj.clear()
+                    return self.login(force=True)
+                raise RuntimeError("Failed to find __RequestVerificationToken on login page")
+
+            req_token = token_match.group(1)
+            return_url = qs.get('ReturnUrl', [''])[0]
+
+            # 2. Submit credentials
+            login_data = {
+                'Username': self.username,
+                'Password': self.password,
+                'ReturnUrl': return_url,
+                'RememberLogin': 'true',
+                '__RequestVerificationToken': req_token
+            }
+
+            post_url = f"{AUTH_BASE_URL}/Account/Login?ReturnUrl=" + urllib.parse.quote(return_url)
+            post_req = urllib.request.Request(
+                post_url,
+                data=urllib.parse.urlencode(login_data).encode(),
+                headers={
+                    'User-Agent': USER_AGENT,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            )
+
+            with self.opener.open(post_req) as post_resp:
+                final_url = post_resp.geturl()
+
+            qs_final = urllib.parse.parse_qs(urllib.parse.urlparse(final_url).query)
+            auth_code = qs_final.get('code', [None])[0]
+
+            if not auth_code:
+                # Check for error in query or page
+                error = qs_final.get('error', [None])[0]
+                raise RuntimeError(f"Authentication failed. No auth code returned. Error: {error}")
 
         # 3. Exchange code for JWT tokens
         token_data = {
@@ -354,7 +401,7 @@ def wait_until_midnight_and_run(client, config):
     if datetime.now() < pre_refresh_time:
         time.sleep((pre_refresh_time - datetime.now()).total_seconds())
         print("[*] Pre-authenticating before midnight...")
-        client.login()
+        client.login(force=True)
 
     # Sleep remaining seconds until exactly midnight
     remaining = (target_time - datetime.now()).total_seconds()
